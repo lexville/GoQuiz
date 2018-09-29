@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 )
 
 type problem struct {
@@ -15,7 +16,10 @@ type problem struct {
 }
 
 func main() {
-	csvFileName := flag.String("csv", "problems.csv", "a csv file that is a has a question coma answer format")
+	csvFileName := flag.String("csv", "problems.csv", `a csv file that is 
+	a has a question coma answer format`)
+	timeLimit := flag.Int("limit", 30, `the time limit for the quiz
+	is 30 sec`)
 	flag.Parse()
 	file, err := os.Open(*csvFileName)
 	defer file.Close()
@@ -27,19 +31,31 @@ func main() {
 		log.Fatal("Uanable to read the csv file")
 	}
 	problems := parseLines(lines)
+	timer := time.NewTimer(time.Duration(*timeLimit) * time.Second)
 	correct := 0
+problemLoop:
 	for i, problem := range problems {
 		fmt.Printf("Problem #%d: %s = \n", i+1, problem.question)
-		var answer string
-		fmt.Scanf("%s\n", &answer)
-		if answer == problem.answer {
-			correct++
-			fmt.Println("Correct")
-		} else {
-			fmt.Println("Incorrect")
+		answerCh := make(chan string)
+		go func() {
+			var answer string
+			fmt.Scanf("%s\n", &answer)
+			answerCh <- answer
+		}()
+		select {
+		case <-timer.C:
+			break problemLoop
+		case answer := <-answerCh:
+			if answer == problem.answer {
+				correct++
+				fmt.Println("Correct")
+			} else {
+				fmt.Println("Incorrect")
+			}
 		}
+
 	}
-	fmt.Printf("Congratulations you've got %d correct \n", correct)
+	fmt.Printf("You've scored %d out of %d \n", correct, len(problems))
 }
 
 func parseLines(lines [][]string) []problem {
